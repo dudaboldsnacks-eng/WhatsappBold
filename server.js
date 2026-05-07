@@ -1,9 +1,12 @@
 import express from "express";
 import makeWASocket, {
-  useMultiFileAuthState
+  fetchLatestBaileysVersion,
+  useMultiFileAuthState,
+  DisconnectReason
 } from "@whiskeysockets/baileys";
 
 import QRCode from "qrcode";
+import P from "pino";
 
 const app = express();
 
@@ -12,9 +15,6 @@ app.use(express.json());
 app.use((req, res, next) => {
 
   const apiKey = req.headers["x-api-key"];
-
-  console.log("HEADER RECEBIDO:", apiKey);
-  console.log("API_KEY RAILWAY:", process.env.API_KEY);
 
   if (apiKey !== process.env.API_KEY) {
     return res.status(401).json({
@@ -32,25 +32,30 @@ async function connectWhatsApp() {
 
   const { state, saveCreds } = await useMultiFileAuthState("auth");
 
+  const { version } = await fetchLatestBaileysVersion();
+
   sock = makeWASocket({
+    version,
     auth: state,
-    printQRInTerminal: false
+    logger: P({ level: "silent" }),
+    printQRInTerminal: false,
+    browser: ["Chrome", "Desktop", "10.0"]
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async ({ connection, qr }) => {
+  sock.ev.on("connection.update", async ({ connection, qr, lastDisconnect }) => {
 
     if (qr) {
 
-      console.log("ESCANEIE O QR:");
+      console.log("========== QR CODE ==========");
 
-      const qrImage = await QRCode.toString(qr, {
+      const qrText = await QRCode.toString(qr, {
         type: "terminal",
         small: true
       });
 
-      console.log(qrImage);
+      console.log(qrText);
 
     }
 
@@ -60,9 +65,14 @@ async function connectWhatsApp() {
 
     if (connection === "close") {
 
-      console.log("RECONNECTANDO...");
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
 
-      connectWhatsApp();
+      console.log("CONEXÃO FECHADA");
+
+      if (shouldReconnect) {
+        connectWhatsApp();
+      }
 
     }
 
