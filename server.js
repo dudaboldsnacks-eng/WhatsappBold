@@ -5,16 +5,18 @@ import makeWASocket, {
   DisconnectReason
 } from "@whiskeysockets/baileys";
 
-import QRCode from "qrcode";
 import P from "pino";
 
 const app = express();
 
 app.use(express.json());
 
+// =========================
+// API KEY
+// =========================
 app.use((req, res, next) => {
 
-  // libera rota principal sem API KEY
+  // libera rota inicial
   if (req.path === "/") {
     return next();
   }
@@ -42,6 +44,9 @@ app.use((req, res, next) => {
 
 let sock;
 
+// =========================
+// CONECTAR WHATSAPP
+// =========================
 async function connectWhatsApp() {
 
   const { state, saveCreds } =
@@ -76,29 +81,36 @@ async function connectWhatsApp() {
       lastDisconnect
     }) => {
 
-      // QR CODE ORIGINAL
+      // =========================
+      // QR CODE
+      // =========================
       if (qr) {
 
-        console.log("QR GERADO");
-
-        const qrImage =
-          await QRCode.toDataURL(qr);
-
-        console.log(qrImage);
+        console.log("");
+        console.log("ESCANEIE O QR CODE AGORA");
+        console.log("");
 
       }
 
-      // conectado
+      // =========================
+      // CONECTADO
+      // =========================
       if (connection === "open") {
 
+        console.log("");
         console.log("WHATSAPP CONECTADO");
+        console.log("");
 
       }
 
-      // desconectado
+      // =========================
+      // DESCONECTOU
+      // =========================
       if (connection === "close") {
 
+        console.log("");
         console.log("RECONNECTANDO...");
+        console.log("");
 
         const shouldReconnect =
           lastDisconnect?.error?.output?.statusCode !==
@@ -120,7 +132,9 @@ async function connectWhatsApp() {
 // inicia conexão
 connectWhatsApp();
 
-// rota enviar mensagem
+// =========================
+// ENVIAR MENSAGEM
+// =========================
 app.post("/notify", async (req, res) => {
 
   try {
@@ -166,21 +180,27 @@ app.post("/notify", async (req, res) => {
 
 });
 
-// rota principal
+// =========================
+// TESTE API
+// =========================
 app.get("/", (req, res) => {
 
   res.send("API online");
 
 });
 
-// iniciar servidor
+// =========================
+// INICIAR SERVIDOR
+// =========================
 app.listen(
 
   process.env.PORT || 3000,
 
   () => {
 
+    console.log("");
     console.log("SERVIDOR ONLINE");
+    console.log("");
 
   }
 
