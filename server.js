@@ -5,34 +5,30 @@ import makeWASocket, {
   DisconnectReason
 } from "@whiskeysockets/baileys";
 
+import QRCode from "qrcode";
 import P from "pino";
 
 const app = express();
 
 app.use(express.json());
 
-// =========================
-// API KEY
-// =========================
 app.use((req, res, next) => {
 
-  // libera rota inicial
+  // libera rota principal sem API KEY
   if (req.path === "/") {
     return next();
   }
 
   const apiKey = req.headers["x-api-key"];
 
-  // LOGS PARA DEBUG
+  // DEBUG
   console.log("HEADER RECEBIDO:", apiKey);
   console.log("API_KEY RAILWAY:", process.env.API_KEY);
 
   if (apiKey !== process.env.API_KEY) {
-
     return res.status(401).json({
       error: "API KEY inválida"
     });
-
   }
 
   next();
@@ -41,110 +37,65 @@ app.use((req, res, next) => {
 
 let sock;
 
-// =========================
-// CONECTAR WHATSAPP
-// =========================
 async function connectWhatsApp() {
 
-  const { state, saveCreds } =
-    await useMultiFileAuthState("auth");
+  const { state, saveCreds } = await useMultiFileAuthState("auth");
 
-  const { version } =
-    await fetchLatestBaileysVersion();
+  const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
-
     version,
     auth: state,
     logger: P({ level: "silent" }),
-
-    browser: [
-      "Chrome",
-      "Desktop",
-      "10.0"
-    ]
-
+    browser: ["Chrome", "Desktop", "10.0"]
   });
 
-  // salva sessão
   sock.ev.on("creds.update", saveCreds);
 
-  // atualizações conexão
-  sock.ev.on(
-    "connection.update",
-    async ({
-      connection,
-      qr,
-      lastDisconnect
-    }) => {
+  sock.ev.on("connection.update", async ({ connection, qr, lastDisconnect }) => {
 
-      // =========================
-      // QR CODE
-      // =========================
-      if (qr) {
+    // QR CODE ORIGINAL
+    if (qr) {
 
-        console.log("");
-        console.log("COPIE O TEXTO ABAIXO:");
-        console.log("");
+      console.log("QR GERADO");
 
-        console.log(qr);
+      const qrImage = await QRCode.toDataURL(qr);
 
-        console.log("");
-        console.log("FIM DO QR");
-        console.log("");
+      console.log(qrImage);
 
-      }
+    }
 
-      // =========================
-      // CONECTADO
-      // =========================
-      if (connection === "open") {
+    // conectado
+    if (connection === "open") {
+      console.log("WHATSAPP CONECTADO");
+    }
 
-        console.log("");
-        console.log("WHATSAPP CONECTADO");
-        console.log("");
+    // desconectado
+    if (connection === "close") {
 
-      }
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !==
+        DisconnectReason.loggedOut;
 
-      // =========================
-      // DESCONECTOU
-      // =========================
-      if (connection === "close") {
-
-        console.log("");
-        console.log("RECONNECTANDO...");
-        console.log("");
-
-        const shouldReconnect =
-          lastDisconnect?.error?.output?.statusCode !==
-          DisconnectReason.loggedOut;
-
-        if (shouldReconnect) {
-
-          connectWhatsApp();
-
-        }
-
+      if (shouldReconnect) {
+        connectWhatsApp();
       }
 
     }
-  );
+
+  });
 
 }
 
-// inicia conexão
 connectWhatsApp();
 
-// =========================
-// ENVIAR MENSAGEM
-// =========================
+// rota enviar mensagem
 app.post("/notify", async (req, res) => {
 
   try {
 
     const { phone, message } = req.body;
 
-    // validação
     if (!phone || !message) {
 
       return res.status(400).json({
@@ -153,22 +104,16 @@ app.post("/notify", async (req, res) => {
 
     }
 
-    // envia mensagem
     await sock.sendMessage(
-
       `${phone}@s.whatsapp.net`,
-
       {
         text: message
       }
-
     );
 
     res.json({
-
       success: true,
       message: "Mensagem enviada"
-
     });
 
   } catch (error) {
@@ -176,37 +121,23 @@ app.post("/notify", async (req, res) => {
     console.log(error);
 
     res.status(500).json({
-
       error: error.message
-
     });
 
   }
 
 });
 
-// =========================
-// TESTE API
-// =========================
+// rota principal
 app.get("/", (req, res) => {
 
   res.send("API online");
 
 });
 
-// =========================
-// INICIAR SERVIDOR
-// =========================
-app.listen(
+// iniciar servidor
+app.listen(process.env.PORT || 3000, () => {
 
-  process.env.PORT || 3000,
+  console.log("SERVIDOR ONLINE");
 
-  () => {
-
-    console.log("");
-    console.log("SERVIDOR ONLINE");
-    console.log("");
-
-  }
-
-);
+});
