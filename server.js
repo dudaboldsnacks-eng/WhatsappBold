@@ -38,7 +38,6 @@ async function connectWhatsApp() {
     version,
     auth: state,
     logger: P({ level: "silent" }),
-    printQRInTerminal: false,
     browser: ["Chrome", "Desktop", "10.0"]
   });
 
@@ -48,14 +47,11 @@ async function connectWhatsApp() {
 
     if (qr) {
 
-      console.log("========== QR CODE ==========");
+      console.log("QR GERADO");
 
-      const qrText = await QRCode.toString(qr, {
-        type: "terminal",
-        small: true
-      });
+      const qrImage = await QRCode.toDataURL(qr);
 
-      console.log(qrText);
+      console.log(qrImage);
 
     }
 
@@ -67,8 +63,6 @@ async function connectWhatsApp() {
 
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-
-      console.log("CONEXÃO FECHADA");
 
       if (shouldReconnect) {
         connectWhatsApp();
@@ -88,12 +82,6 @@ app.post("/notify", async (req, res) => {
 
     const { phone, message } = req.body;
 
-    if (!sock) {
-      return res.status(500).json({
-        error: "WhatsApp não conectado"
-      });
-    }
-
     await sock.sendMessage(
       `${phone}@s.whatsapp.net`,
       {
@@ -106,8 +94,6 @@ app.post("/notify", async (req, res) => {
     });
 
   } catch (error) {
-
-    console.log(error);
 
     res.status(500).json({
       error: error.message
