@@ -11,9 +11,12 @@ const app = express();
 
 app.use(express.json());
 
+// =========================
+// API KEY
+// =========================
 app.use((req, res, next) => {
 
-  // libera a rota principal sem API KEY
+  // libera rota inicial
   if (req.path === "/") {
     return next();
   }
@@ -21,9 +24,11 @@ app.use((req, res, next) => {
   const apiKey = req.headers["x-api-key"];
 
   if (apiKey !== process.env.API_KEY) {
+
     return res.status(401).json({
       error: "API KEY inválida"
     });
+
   }
 
   next();
@@ -32,6 +37,9 @@ app.use((req, res, next) => {
 
 let sock;
 
+// =========================
+// CONECTAR WHATSAPP
+// =========================
 async function connectWhatsApp() {
 
   const { state, saveCreds } =
@@ -41,30 +49,51 @@ async function connectWhatsApp() {
     await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
+
     version,
     auth: state,
     logger: P({ level: "silent" }),
-    browser: ["Chrome", "Desktop", "10.0"]
+
+    browser: [
+      "Chrome",
+      "Desktop",
+      "10.0"
+    ]
+
   });
 
+  // salva sessão
   sock.ev.on("creds.update", saveCreds);
 
+  // atualizações conexão
   sock.ev.on(
     "connection.update",
-    async ({ connection, qr, lastDisconnect }) => {
+    async ({
+      connection,
+      qr,
+      lastDisconnect
+    }) => {
 
+      // =========================
       // QR CODE
+      // =========================
       if (qr) {
 
         console.log("");
-        console.log("=========== QR CODE ===========");
+        console.log("COPIE O TEXTO ABAIXO:");
+        console.log("");
+
         console.log(qr);
-        console.log("================================");
+
+        console.log("");
+        console.log("FIM DO QR");
         console.log("");
 
       }
 
-      // conectado
+      // =========================
+      // CONECTADO
+      // =========================
       if (connection === "open") {
 
         console.log("");
@@ -73,7 +102,9 @@ async function connectWhatsApp() {
 
       }
 
-      // desconectado
+      // =========================
+      // DESCONECTOU
+      // =========================
       if (connection === "close") {
 
         console.log("");
@@ -85,7 +116,9 @@ async function connectWhatsApp() {
           DisconnectReason.loggedOut;
 
         if (shouldReconnect) {
+
           connectWhatsApp();
+
         }
 
       }
@@ -95,31 +128,43 @@ async function connectWhatsApp() {
 
 }
 
+// inicia conexão
 connectWhatsApp();
 
-// rota para enviar mensagens
+// =========================
+// ENVIAR MENSAGEM
+// =========================
 app.post("/notify", async (req, res) => {
 
   try {
 
     const { phone, message } = req.body;
 
+    // validação
     if (!phone || !message) {
+
       return res.status(400).json({
         error: "phone e message são obrigatórios"
       });
+
     }
 
+    // envia mensagem
     await sock.sendMessage(
+
       `${phone}@s.whatsapp.net`,
+
       {
         text: message
       }
+
     );
 
     res.json({
+
       success: true,
       message: "Mensagem enviada"
+
     });
 
   } catch (error) {
@@ -127,25 +172,37 @@ app.post("/notify", async (req, res) => {
     console.log(error);
 
     res.status(500).json({
+
       error: error.message
+
     });
 
   }
 
 });
 
-// rota principal
+// =========================
+// TESTE API
+// =========================
 app.get("/", (req, res) => {
 
   res.send("API online");
 
 });
 
-// inicia servidor
-app.listen(process.env.PORT || 3000, () => {
+// =========================
+// INICIAR SERVIDOR
+// =========================
+app.listen(
 
-  console.log("");
-  console.log("SERVIDOR ONLINE");
-  console.log("");
+  process.env.PORT || 3000,
 
-});
+  () => {
+
+    console.log("");
+    console.log("SERVIDOR ONLINE");
+    console.log("");
+
+  }
+
+);
