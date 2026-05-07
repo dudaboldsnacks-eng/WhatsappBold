@@ -66,18 +66,16 @@ async function startWhatsApp() {
 
       if (qr && !connected) {
 
-        currentQr = qr;
+  currentQr = qr;
 
-        console.log("");
-        console.log("=================================");
-        console.log("ESCANEIE O QR CODE");
-        console.log("=================================");
-        console.log("");
-
-        qrcode.generate(qr, {
-          small: true
-        });
-      }
+  console.log("");
+  console.log("=================================");
+  console.log("QR CODE TEXTO");
+  console.log("=================================");
+  console.log("");
+  console.log(qr);
+  console.log("");
+}
 
       if (connection === "open") {
 
