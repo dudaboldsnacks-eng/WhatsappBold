@@ -19,16 +19,21 @@ app.use((req, res, next) => {
     return next();
   }
 
+  // DEBUG HEADERS
+  console.log("HEADERS COMPLETOS:");
+  console.log(req.headers);
+
   const apiKey = req.headers["x-api-key"];
 
-  // DEBUG
   console.log("HEADER RECEBIDO:", apiKey);
   console.log("API_KEY RAILWAY:", process.env.API_KEY);
 
   if (apiKey !== process.env.API_KEY) {
+
     return res.status(401).json({
       error: "API KEY inválida"
     });
+
   }
 
   next();
@@ -39,54 +44,80 @@ let sock;
 
 async function connectWhatsApp() {
 
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  const { state, saveCreds } =
+    await useMultiFileAuthState("auth");
 
-  const { version } = await fetchLatestBaileysVersion();
+  const { version } =
+    await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
+
     version,
     auth: state,
     logger: P({ level: "silent" }),
-    browser: ["Chrome", "Desktop", "10.0"]
+
+    browser: [
+      "Chrome",
+      "Desktop",
+      "10.0"
+    ]
+
   });
 
+  // salva sessão
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async ({ connection, qr, lastDisconnect }) => {
+  // atualizações conexão
+  sock.ev.on(
+    "connection.update",
+    async ({
+      connection,
+      qr,
+      lastDisconnect
+    }) => {
 
-    // QR CODE ORIGINAL
-    if (qr) {
+      // QR CODE ORIGINAL
+      if (qr) {
 
-      console.log("QR GERADO");
+        console.log("QR GERADO");
 
-      const qrImage = await QRCode.toDataURL(qr);
+        const qrImage =
+          await QRCode.toDataURL(qr);
 
-      console.log(qrImage);
+        console.log(qrImage);
 
-    }
+      }
 
-    // conectado
-    if (connection === "open") {
-      console.log("WHATSAPP CONECTADO");
-    }
+      // conectado
+      if (connection === "open") {
 
-    // desconectado
-    if (connection === "close") {
+        console.log("WHATSAPP CONECTADO");
 
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !==
-        DisconnectReason.loggedOut;
+      }
 
-      if (shouldReconnect) {
-        connectWhatsApp();
+      // desconectado
+      if (connection === "close") {
+
+        console.log("RECONNECTANDO...");
+
+        const shouldReconnect =
+          lastDisconnect?.error?.output?.statusCode !==
+          DisconnectReason.loggedOut;
+
+        if (shouldReconnect) {
+
+          connectWhatsApp();
+
+        }
+
       }
 
     }
-
-  });
+  );
 
 }
 
+// inicia conexão
 connectWhatsApp();
 
 // rota enviar mensagem
@@ -105,15 +136,20 @@ app.post("/notify", async (req, res) => {
     }
 
     await sock.sendMessage(
+
       `${phone}@s.whatsapp.net`,
+
       {
         text: message
       }
+
     );
 
     res.json({
+
       success: true,
       message: "Mensagem enviada"
+
     });
 
   } catch (error) {
@@ -121,7 +157,9 @@ app.post("/notify", async (req, res) => {
     console.log(error);
 
     res.status(500).json({
+
       error: error.message
+
     });
 
   }
@@ -136,8 +174,14 @@ app.get("/", (req, res) => {
 });
 
 // iniciar servidor
-app.listen(process.env.PORT || 3000, () => {
+app.listen(
 
-  console.log("SERVIDOR ONLINE");
+  process.env.PORT || 3000,
 
-});
+  () => {
+
+    console.log("SERVIDOR ONLINE");
+
+  }
+
+);
