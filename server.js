@@ -23,7 +23,7 @@ let qrShown = false;
 async function startWhatsApp() {
 
   const { state, saveCreds } =
-    await useMultiFileAuthState("auth_info");
+    await useMultiFileAuthState
 
   sock = makeWASocket({
     auth: state,
