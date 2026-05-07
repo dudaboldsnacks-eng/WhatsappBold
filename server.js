@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
+import fs from "fs";
 
 import {
   default as makeWASocket,
@@ -17,104 +18,131 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-let sock = null;
+let sock;
 let currentQr = null;
 let connected = false;
+let reconnecting = false;
+
+async function clearAuthFolder() {
+  try {
+    if (fs.existsSync("./auth")) {
+      fs.rmSync("./auth", {
+        recursive: true,
+        force: true
+      });
+    }
+  } catch (err) {
+    console.log("ERRO AO LIMPAR AUTH:", err.message);
+  }
+}
 
 async function startWhatsApp() {
 
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  try {
 
-  const { version } = await fetchLatestBaileysVersion();
+    const { state, saveCreds } =
+      await useMultiFileAuthState("auth");
 
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger: pino({ level: "silent" }),
-    printQRInTerminal: false,
-    browser: ["Chrome", "Desktop", "1.0.0"]
-  });
+    const { version } =
+      await fetchLatestBaileysVersion();
 
-  sock.ev.on("creds.update", saveCreds);
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger: pino({ level: "silent" }),
+      printQRInTerminal: false,
+      browser: ["Ubuntu", "Chrome", "20.0.04"]
+    });
 
-  sock.ev.on("connection.update", async (update) => {
+    sock.ev.on("creds.update", saveCreds);
 
-    const { connection, qr, lastDisconnect } = update;
+    sock.ev.on("connection.update", async (update) => {
 
-    if (qr) {
+      const {
+        connection,
+        qr,
+        lastDisconnect
+      } = update;
 
-      currentQr = qr;
+      if (qr && !connected) {
 
-      console.log("");
-      console.log("=================================");
-      console.log("ESCANEIE O QR CODE");
-      console.log("=================================");
-      console.log("");
+        currentQr = qr;
 
-      qrcode.generate(qr, {
-        small: true
-      });
-    }
+        console.log("");
+        console.log("=================================");
+        console.log("ESCANEIE O QR CODE");
+        console.log("=================================");
+        console.log("");
 
-    if (connection === "open") {
-
-      connected = true;
-
-      console.log("");
-      console.log("=================================");
-      console.log("WHATSAPP CONECTADO");
-      console.log("=================================");
-      console.log("");
-    }
-
-    if (connection === "close") {
-
-      connected = false;
-
-      const statusCode =
-        lastDisconnect?.error?.output?.statusCode;
-
-      console.log("");
-      console.log("=================================");
-      console.log("CONEXAO FECHADA");
-      console.log("STATUS:", statusCode);
-      console.log("=================================");
-      console.log("");
-
-      if (
-        statusCode === DisconnectReason.loggedOut ||
-        statusCode === 401 ||
-        statusCode === 405
-      ) {
-
-        console.log("SESSAO INVALIDA");
-        console.log("APAGANDO AUTH...");
-
-        const fs = await import("fs");
-
-        if (fs.existsSync("./auth")) {
-          fs.rmSync("./auth", {
-            recursive: true,
-            force: true
-          });
-        }
-
-        console.log("REINICIANDO LIMPO...");
-
-        setTimeout(() => {
-          startWhatsApp();
-        }, 5000);
-
-        return;
+        qrcode.generate(qr, {
+          small: true
+        });
       }
 
-      console.log("RECONectando em 5 segundos...");
+      if (connection === "open") {
 
-      setTimeout(() => {
-        startWhatsApp();
-      }, 5000);
-    }
-  });
+        connected = true;
+        reconnecting = false;
+
+        console.log("");
+        console.log("=================================");
+        console.log("WHATSAPP CONECTADO");
+        console.log("=================================");
+        console.log("");
+      }
+
+      if (connection === "close") {
+
+        connected = false;
+
+        const statusCode =
+          lastDisconnect?.error?.output?.statusCode;
+
+        console.log("");
+        console.log("=================================");
+        console.log("CONEXAO FECHADA");
+        console.log("STATUS:", statusCode);
+        console.log("=================================");
+        console.log("");
+
+        if (reconnecting) return;
+
+        reconnecting = true;
+
+        if (
+          statusCode === DisconnectReason.loggedOut ||
+          statusCode === 401 ||
+          statusCode === 405
+        ) {
+
+          console.log("SESSAO INVALIDA");
+          console.log("LIMPANDO AUTH...");
+
+          await clearAuthFolder();
+        }
+
+        console.log("REINICIANDO EM 5 SEGUNDOS...");
+
+        setTimeout(() => {
+          reconnecting = false;
+          startWhatsApp();
+        }, 5000);
+      }
+    });
+
+  } catch (err) {
+
+    console.log("");
+    console.log("=================================");
+    console.log("ERRO GERAL");
+    console.log("=================================");
+    console.log(err);
+    console.log("");
+
+    setTimeout(() => {
+      startWhatsApp();
+    }, 5000);
+  }
 }
 
 app.get("/", (req, res) => {
