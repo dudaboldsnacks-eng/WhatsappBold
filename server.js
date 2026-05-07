@@ -5,7 +5,6 @@ import makeWASocket, {
   DisconnectReason
 } from "@whiskeysockets/baileys";
 
-import QRCode from "qrcode";
 import P from "pino";
 
 const app = express();
@@ -13,6 +12,11 @@ const app = express();
 app.use(express.json());
 
 app.use((req, res, next) => {
+
+  // libera a rota principal sem API KEY
+  if (req.path === "/") {
+    return next();
+  }
 
   const apiKey = req.headers["x-api-key"];
 
@@ -30,9 +34,11 @@ let sock;
 
 async function connectWhatsApp() {
 
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  const { state, saveCreds } =
+    await useMultiFileAuthState("auth");
 
-  const { version } = await fetchLatestBaileysVersion();
+  const { version } =
+    await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
     version,
@@ -43,44 +49,66 @@ async function connectWhatsApp() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async ({ connection, qr, lastDisconnect }) => {
+  sock.ev.on(
+    "connection.update",
+    async ({ connection, qr, lastDisconnect }) => {
 
-    if (qr) {
+      // QR CODE
+      if (qr) {
 
-      console.log("QR GERADO");
+        console.log("");
+        console.log("=========== QR CODE ===========");
+        console.log(qr);
+        console.log("================================");
+        console.log("");
 
-      const qrImage = await QRCode.toDataURL(qr);
+      }
 
-      console.log(qrImage);
+      // conectado
+      if (connection === "open") {
 
-    }
+        console.log("");
+        console.log("WHATSAPP CONECTADO");
+        console.log("");
 
-    if (connection === "open") {
-      console.log("WHATSAPP CONECTADO");
-    }
+      }
 
-    if (connection === "close") {
+      // desconectado
+      if (connection === "close") {
 
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        console.log("");
+        console.log("RECONNECTANDO...");
+        console.log("");
 
-      if (shouldReconnect) {
-        connectWhatsApp();
+        const shouldReconnect =
+          lastDisconnect?.error?.output?.statusCode !==
+          DisconnectReason.loggedOut;
+
+        if (shouldReconnect) {
+          connectWhatsApp();
+        }
+
       }
 
     }
-
-  });
+  );
 
 }
 
 connectWhatsApp();
 
+// rota para enviar mensagens
 app.post("/notify", async (req, res) => {
 
   try {
 
     const { phone, message } = req.body;
+
+    if (!phone || !message) {
+      return res.status(400).json({
+        error: "phone e message são obrigatórios"
+      });
+    }
 
     await sock.sendMessage(
       `${phone}@s.whatsapp.net`,
@@ -90,10 +118,13 @@ app.post("/notify", async (req, res) => {
     );
 
     res.json({
-      success: true
+      success: true,
+      message: "Mensagem enviada"
     });
 
   } catch (error) {
+
+    console.log(error);
 
     res.status(500).json({
       error: error.message
@@ -103,10 +134,18 @@ app.post("/notify", async (req, res) => {
 
 });
 
+// rota principal
 app.get("/", (req, res) => {
+
   res.send("API online");
+
 });
 
+// inicia servidor
 app.listen(process.env.PORT || 3000, () => {
+
+  console.log("");
   console.log("SERVIDOR ONLINE");
+  console.log("");
+
 });
