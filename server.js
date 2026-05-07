@@ -1,238 +1,139 @@
-const express = require("express");
-const cors = require("cors");
-const {
-  default: makeWASocket,
-  useMultiFileAuthState
-} = require("@whiskeysockets/baileys");
+import express from "express";
+import cors from "cors";
+import pino from "pino";
+import qrcode from "qrcode-terminal";
 
-const Pino = require("pino");
+import {
+  default as makeWASocket,
+  DisconnectReason,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion
+} from "@whiskeysockets/baileys";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.API_KEY || "boldapi";
+const PORT = process.env.PORT || 8080;
 
 let sock = null;
+let currentQr = null;
 let connected = false;
-let qrShown = false;
-let reconnecting = false;
 
 async function startWhatsApp() {
 
-  try {
+  const { state, saveCreds } = await useMultiFileAuthState("auth");
 
-    const { state, saveCreds } =
-      await useMultiFileAuthState("auth_info");
+  const { version } = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: Pino({ level: "silent" }),
-      browser: ["Chrome", "Desktop", "1.0.0"]
-    });
+  sock = makeWASocket({
+    version,
+    auth: state,
+    logger: pino({ level: "silent" }),
+    printQRInTerminal: false,
+    browser: ["Chrome", "Desktop", "1.0.0"]
+  });
 
-    sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("connection.update", async ({
-      connection,
-      qr,
-      lastDisconnect
-    }) => {
+  sock.ev.on("connection.update", async (update) => {
 
-      try {
+    const { connection, qr, lastDisconnect } = update;
 
-        // QR CODE APENAS UMA VEZ
-        if (qr && !qrShown) {
+    if (qr) {
 
-          qrShown = true;
+      currentQr = qr;
 
-          console.log("");
-          console.log("=================================");
-          console.log("ESCANEIE O QR CODE");
-          console.log("=================================");
-          console.log("");
+      console.log("");
+      console.log("=================================");
+      console.log("ESCANEIE O QR CODE");
+      console.log("=================================");
+      console.log("");
 
-          // QR CURTO
-          console.log(qr);
+      qrcode.generate(qr, {
+        small: true
+      });
+    }
 
-          console.log("");
-          console.log("Cole o texto acima em:");
-          console.log("https://www.qr-code-generator.com/");
-          console.log("Tipo: TEXT");
-          console.log("");
+    if (connection === "open") {
 
+      connected = true;
+
+      console.log("");
+      console.log("=================================");
+      console.log("WHATSAPP CONECTADO");
+      console.log("=================================");
+      console.log("");
+    }
+
+    if (connection === "close") {
+
+      connected = false;
+
+      const statusCode =
+        lastDisconnect?.error?.output?.statusCode;
+
+      console.log("");
+      console.log("=================================");
+      console.log("CONEXAO FECHADA");
+      console.log("STATUS:", statusCode);
+      console.log("=================================");
+      console.log("");
+
+      if (
+        statusCode === DisconnectReason.loggedOut ||
+        statusCode === 401 ||
+        statusCode === 405
+      ) {
+
+        console.log("SESSAO INVALIDA");
+        console.log("APAGANDO AUTH...");
+
+        const fs = await import("fs");
+
+        if (fs.existsSync("./auth")) {
+          fs.rmSync("./auth", {
+            recursive: true,
+            force: true
+          });
         }
 
-        // CONECTADO
-        if (connection === "open") {
+        console.log("REINICIANDO LIMPO...");
 
-          connected = true;
-          reconnecting = false;
+        setTimeout(() => {
+          startWhatsApp();
+        }, 5000);
 
-          console.log("");
-          console.log("=================================");
-          console.log("WHATSAPP CONECTADO");
-          console.log("=================================");
-          console.log("");
-
-        }
-
-        // DESCONECTOU
-        if (connection === "close") {
-
-          connected = false;
-
-          console.log("");
-          console.log("=================================");
-          console.log("CONEXAO FECHADA");
-          console.log("=================================");
-          console.log("");
-
-          console.log(lastDisconnect || "SEM DETALHES");
-
-          // EVITA LOOP INFINITO
-          if (!reconnecting) {
-
-            reconnecting = true;
-
-            console.log("");
-            console.log("RECONectando em 5 segundos...");
-            console.log("");
-
-            setTimeout(() => {
-
-              qrShown = false;
-              reconnecting = false;
-
-              startWhatsApp();
-
-            }, 5000);
-
-          }
-
-        }
-
-      } catch (err) {
-
-        console.log("");
-        console.log("ERRO connection.update");
-        console.log(err);
-        console.log("");
-
+        return;
       }
 
-    });
+      console.log("RECONectando em 5 segundos...");
 
-  } catch (err) {
-
-    console.log("");
-    console.log("ERRO startWhatsApp");
-    console.log(err);
-    console.log("");
-
-    setTimeout(() => {
-      startWhatsApp();
-    }, 5000);
-
-  }
-
+      setTimeout(() => {
+        startWhatsApp();
+      }, 5000);
+    }
+  });
 }
 
-startWhatsApp();
-
-// STATUS
 app.get("/", (req, res) => {
+
+  const receivedHeader =
+    req.headers["apikey"] ||
+    req.headers["api_key"] ||
+    req.headers["authorization"] ||
+    "nenhum";
 
   res.json({
     status: "online",
-    whatsapp: connected
+    connected,
+    qr: currentQr ? true : false,
+    header_recebido: receivedHeader,
+    api_key_railway: process.env.API_KEY || "não definida"
   });
-
 });
 
-// ENVIAR MENSAGEM
-app.post("/notify", async (req, res) => {
-
-  try {
-
-    const receivedKey =
-      req.headers["x-api-key"];
-
-    // LOGS IMPORTANTES
-    console.log("");
-    console.log("HEADER RECEBIDO:", receivedKey);
-    console.log("API_KEY RAILWAY:", API_KEY);
-    console.log("");
-
-    // VALIDA API KEY
-    if (receivedKey !== API_KEY) {
-
-      return res.status(401).json({
-        error: "api key invalida"
-      });
-
-    }
-
-    const { phone, message } = req.body;
-
-    // VALIDA DADOS
-    if (!phone || !message) {
-
-      return res.status(400).json({
-        error: "phone e message obrigatorios"
-      });
-
-    }
-
-    // WHATSAPP OFFLINE
-    if (!connected || !sock) {
-
-      return res.status(500).json({
-        error: "whatsapp nao conectado"
-      });
-
-    }
-
-    // FORMATA NUMERO
-    const number =
-      phone.replace(/\D/g, "") +
-      "@s.whatsapp.net";
-
-    // ENVIA
-    await sock.sendMessage(number, {
-      text: message
-    });
-
-    console.log("");
-    console.log("=================================");
-    console.log("MENSAGEM ENVIADA");
-    console.log("PARA:", phone);
-    console.log("=================================");
-    console.log("");
-
-    res.json({
-      success: true
-    });
-
-  } catch (err) {
-
-    console.log("");
-    console.log("ERRO AO ENVIAR");
-    console.log(err);
-    console.log("");
-
-    res.status(500).json({
-      error: "erro interno"
-    });
-
-  }
-
-});
-
-// START SERVIDOR
 app.listen(PORT, () => {
 
   console.log("");
@@ -242,4 +143,5 @@ app.listen(PORT, () => {
   console.log("=================================");
   console.log("");
 
+  startWhatsApp();
 });
