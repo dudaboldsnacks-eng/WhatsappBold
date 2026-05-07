@@ -5,30 +5,31 @@ import makeWASocket, {
   DisconnectReason
 } from "@whiskeysockets/baileys";
 
+import QRCode from "qrcode";
 import P from "pino";
 
 const app = express();
 
 app.use(express.json());
 
+let qrShown = false;
+
 // =========================
 // API KEY
 // =========================
 app.use((req, res, next) => {
 
-  // libera rota inicial
   if (req.path === "/") {
     return next();
   }
 
-  // DEBUG HEADERS
   console.log("HEADERS COMPLETOS:");
   console.log(req.headers);
 
   const apiKey = req.headers["x-api-key"];
 
   console.log("HEADER RECEBIDO:", apiKey);
-console.log("API_KEY RAILWAY:", process.env.API_KEY);
+  console.log("API_KEY RAILWAY:", process.env.API_KEY);
 
   if (apiKey !== process.env.API_KEY) {
 
@@ -69,10 +70,8 @@ async function connectWhatsApp() {
 
   });
 
-  // salva sessão
   sock.ev.on("creds.update", saveCreds);
 
-  // atualizações conexão
   sock.ev.on(
     "connection.update",
     async ({
@@ -84,10 +83,19 @@ async function connectWhatsApp() {
       // =========================
       // QR CODE
       // =========================
-      if (qr) {
+      if (qr && !qrShown) {
+
+        qrShown = true;
 
         console.log("");
-        console.log("ESCANEIE O QR CODE AGORA");
+        console.log("QR GERADO");
+        console.log("");
+
+        const qrImage =
+          await QRCode.toDataURL(qr);
+
+        console.log(qrImage);
+
         console.log("");
 
       }
@@ -104,13 +112,15 @@ async function connectWhatsApp() {
       }
 
       // =========================
-      // DESCONECTOU
+      // DESCONECTADO
       // =========================
       if (connection === "close") {
 
         console.log("");
         console.log("RECONNECTANDO...");
         console.log("");
+
+        qrShown = false;
 
         const shouldReconnect =
           lastDisconnect?.error?.output?.statusCode !==
