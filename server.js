@@ -70,33 +70,41 @@ async function startWhatsApp() {
 
     if (connection === "close") {
 
-      connected = false;
+  connected = false;
 
-      console.log("");
-      console.log("CONEXAO FECHADA");
-      console.log("");
+  console.log("");
+  console.log("=================================");
+  console.log("CONEXAO FECHADA");
+  console.log("=================================");
+  console.log("");
 
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !==
-        DisconnectReason.loggedOut;
+  const statusCode =
+    lastDisconnect?.error?.output?.statusCode;
 
-      if (shouldReconnect) {
+  console.log("STATUS:", statusCode);
 
-        qrShown = false;
+  if (statusCode === DisconnectReason.loggedOut) {
 
-        setTimeout(() => {
-          startWhatsApp();
-        }, 5000);
+    console.log("");
+    console.log("WHATSAPP DESCONECTADO");
+    console.log("APAGUE auth_info E ESCANEIE NOVAMENTE");
+    console.log("");
 
-      }
+    return;
 
-    }
+  }
 
-  });
+  console.log("");
+  console.log("RECONectando em 5 segundos...");
+  console.log("");
+
+  qrShown = false;
+
+  setTimeout(() => {
+    startWhatsApp();
+  }, 5000);
 
 }
-
-startWhatsApp();
 
 app.get("/", (req, res) => {
 
