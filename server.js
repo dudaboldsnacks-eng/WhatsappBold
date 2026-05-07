@@ -85,19 +85,17 @@ async function connectWhatsApp() {
       // =========================
       if (qr && !qrShown) {
 
-        qrShown = true;
+  qrShown = true;
 
-        console.log("");
-        console.log("QR GERADO");
-        console.log("");
+  console.log("");
+  console.log("QR GERADO");
+  console.log("");
 
-        const qrImage =
-          await QRCode.toDataURL(qr);
+  console.log(qr);
 
-        console.log(qrImage);
+  console.log("");
 
-        console.log("");
-
+}
       }
 
       // =========================
