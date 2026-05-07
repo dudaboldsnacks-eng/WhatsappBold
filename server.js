@@ -160,6 +160,21 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/debug", (req, res) => {
+
+  const receivedHeader =
+    req.headers["apikey"] ||
+    req.headers["api_key"] ||
+    req.headers["authorization"] ||
+    "nenhum";
+
+  res.json({
+    HEADER_RECEBIDO: receivedHeader,
+    API_KEY_RAILWAY: process.env.API_KEY || "não definida",
+    HEADERS_COMPLETOS: req.headers
+  });
+});
+
 app.listen(PORT, () => {
 
   console.log("");
