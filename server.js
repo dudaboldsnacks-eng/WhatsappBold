@@ -6,7 +6,7 @@ const {
   DisconnectReason
 } = require("@whiskeysockets/baileys");
 
-const P = require("pino");
+const Pino = require("pino");
 
 const app = express();
 
@@ -14,22 +14,21 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-
 const API_KEY = process.env.API_KEY || "boldapi";
 
 let sock;
-let qrShown = false;
 let connected = false;
+let qrShown = false;
 
 async function startWhatsApp() {
 
   const { state, saveCreds } =
-    await useMultiFileAuthState("auth");
+    await useMultiFileAuthState("auth_info");
 
   sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    logger: P({ level: "silent" })
+    logger: Pino({ level: "silent" })
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -46,17 +45,15 @@ async function startWhatsApp() {
 
       console.log("");
       console.log("=================================");
-      console.log("ESCANEIE O QR CODE");
+      console.log("ESCANEIE O QR");
       console.log("=================================");
       console.log("");
 
       console.log(qr);
 
       console.log("");
-      console.log("Cole esse texto em:");
+      console.log("Cole o texto acima em:");
       console.log("https://www.qr-code-generator.com/");
-      console.log("");
-      console.log("Escolha: TEXT");
       console.log("");
 
     }
@@ -66,9 +63,7 @@ async function startWhatsApp() {
       connected = true;
 
       console.log("");
-      console.log("=================================");
       console.log("WHATSAPP CONECTADO");
-      console.log("=================================");
       console.log("");
 
     }
@@ -77,17 +72,16 @@ async function startWhatsApp() {
 
       connected = false;
 
+      console.log("");
+      console.log("CONEXAO FECHADA");
+      console.log("");
+
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !==
         DisconnectReason.loggedOut;
 
-      console.log("");
-      console.log("CONEXÃO FECHADA");
-      console.log("");
-
       if (shouldReconnect) {
 
-        console.log("RECONectando...");
         qrShown = false;
 
         setTimeout(() => {
@@ -120,15 +114,13 @@ app.post("/notify", async (req, res) => {
     const receivedKey =
       req.headers["x-api-key"];
 
-    console.log("");
     console.log("HEADER RECEBIDO:", receivedKey);
     console.log("API_KEY RAILWAY:", API_KEY);
-    console.log("");
 
     if (receivedKey !== API_KEY) {
 
       return res.status(401).json({
-        error: "API KEY INVALIDA"
+        error: "api key invalida"
       });
 
     }
@@ -152,27 +144,25 @@ app.post("/notify", async (req, res) => {
     }
 
     const number =
-      phone.replace(/\D/g, "") + "@s.whatsapp.net";
+      phone.replace(/\D/g, "") +
+      "@s.whatsapp.net";
 
     await sock.sendMessage(number, {
       text: message
     });
 
-    console.log("");
     console.log("MENSAGEM ENVIADA");
-    console.log("PARA:", phone);
-    console.log("");
 
     res.json({
       success: true
     });
 
-  } catch (error) {
+  } catch (err) {
 
-    console.log(error);
+    console.log(err);
 
     res.status(500).json({
-      error: "erro ao enviar mensagem"
+      error: "erro interno"
     });
 
   }
@@ -182,10 +172,7 @@ app.post("/notify", async (req, res) => {
 app.listen(PORT, () => {
 
   console.log("");
-  console.log("=================================");
   console.log("SERVIDOR ONLINE");
-  console.log("PORTA:", PORT);
-  console.log("=================================");
   console.log("");
 
 });
