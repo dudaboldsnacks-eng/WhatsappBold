@@ -41,7 +41,7 @@ async function startWhatsApp() {
   try {
 
     const { state, saveCreds } =
-      await useMultiFileAuthState("auth");
+      await useMultiFileAuthState("auth2");
 
     const { version } =
       await fetchLatestBaileysVersion();
