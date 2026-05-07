@@ -18,6 +18,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
+console.log("API_KEY =", process.env.API_KEY);
+
 let sock;
 let currentQr = null;
 let connected = false;
